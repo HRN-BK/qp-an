@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sparkles, Save, X } from "lucide-react";
+import { NewTagDialog } from "@/components/NewTagDialog";
 
 const vocabularySchema = z.object({
   word: z.string().min(1, "Word is required"),
@@ -254,10 +255,18 @@ export default function NewVocabularyPage() {
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyPress={handleTagKeyPress}
+                  className="flex-1"
                 />
                 <Button type="button" onClick={addTag} variant="outline">
                   Add
                 </Button>
+                <NewTagDialog 
+                  onTagCreated={(tagName) => {
+                    if (!tags.includes(tagName)) {
+                      setTags([...tags, tagName]);
+                    }
+                  }}
+                />
               </div>
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
