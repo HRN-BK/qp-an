@@ -2,13 +2,17 @@
 
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Home, BookOpen, FileText, Tags, BarChart3, Menu, X, Zap } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function Header() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   // Avoid hydration mismatch
   useEffect(() => {
@@ -19,6 +23,14 @@ export function Header() {
     setTheme(theme === "light" ? "dark" : "light");
   };
 
+  const navigationItems = [
+    { href: "/", label: "Home", icon: Home },
+    { href: "/flashcards", label: "Study Cards", icon: Zap },
+    { href: "/vocabulary", label: "Vocabulary", icon: BookOpen },
+    { href: "/extract", label: "Extract", icon: FileText },
+    { href: "/tags", label: "Tags", icon: Tags },
+  ];
+
   return (
     <header className="border-b bg-background">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -27,8 +39,48 @@ export function Header() {
           <h1 className="text-xl font-bold">AI Vocab</h1>
         </div>
 
-        {/* Right side controls */}
+{/* Navigation */}
         <div className="flex items-center space-x-4">
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex space-x-4">
+            {navigationItems.map(({ href, label, icon: Icon }) => {
+              const isActive = href === '/' 
+                ? pathname === '/' 
+                : pathname.startsWith(href);
+              
+              return (
+                <Link 
+                  key={href}
+                  href={href} 
+                  aria-label={label} 
+                  className={`p-2 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Mobile Menu Button */}
+          <SignedIn>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle mobile menu"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </Button>
+          </SignedIn>
           {/* Dark mode toggle */}
           {mounted && (
             <Button
@@ -63,6 +115,35 @@ export function Header() {
           </SignedIn>
         </div>
       </div>
+
+      {/* Mobile Navigation Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden border-t bg-background">
+          <nav className="container mx-auto px-4 py-4 space-y-2">
+            {navigationItems.map(({ href, label, icon: Icon }) => {
+              const isActive = href === '/' 
+                ? pathname === '/' 
+                : pathname.startsWith(href);
+              
+              return (
+                <Link 
+                  key={href}
+                  href={href}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'hover:bg-muted'
+                  }`}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

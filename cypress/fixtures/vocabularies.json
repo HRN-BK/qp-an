@@ -1,0 +1,81 @@
+[
+  {
+    "id": 1,
+    "word": "apple",
+    "meaning": "táo",
+    "definition": "A round fruit with firm flesh and a crisp texture",
+    "example": "I eat an apple every day for breakfast.",
+    "cefr_level": "A1",
+    "mastery_level": 1,
+    "synonyms": [
+      { "synonym_text": "fruit" }
+    ],
+    "antonyms": [],
+    "audio_url": null
+  },
+  {
+    "id": 2,
+    "word": "beautiful",
+    "meaning": "đẹp",
+    "definition": "Pleasing the senses or mind aesthetically",
+    "example": "The sunset was beautiful tonight.",
+    "cefr_level": "A2",
+    "mastery_level": 2,
+    "synonyms": [
+      { "synonym_text": "pretty" },
+      { "synonym_text": "lovely" }
+    ],
+    "antonyms": [
+      { "antonym_text": "ugly" }
+    ],
+    "audio_url": null
+  },
+  {
+    "id": 3,
+    "word": "challenge",
+    "meaning": "thách thức",
+    "definition": "A call to take part in a contest or competition",
+    "example": "Learning a new language is always a challenge.",
+    "cefr_level": "B1",
+    "mastery_level": 0,
+    "synonyms": [
+      { "synonym_text": "contest" },
+      { "synonym_text": "competition" }
+    ],
+    "antonyms": [],
+    "audio_url": null
+  },
+  {
+    "id": 4,
+    "word": "determine",
+    "meaning": "xác định",
+    "definition": "To establish exactly by research or calculation",
+    "example": "We need to determine the cause of the problem.",
+    "cefr_level": "B2",
+    "mastery_level": 3,
+    "synonyms": [
+      { "synonym_text": "establish" },
+      { "synonym_text": "decide" }
+    ],
+    "antonyms": [],
+    "audio_url": null
+  },
+  {
+    "id": 5,
+    "word": "exceptional",
+    "meaning": "đặc biệt",
+    "definition": "Unusual; not typical",
+    "example": "She has exceptional talent in mathematics.",
+    "cefr_level": "C1",
+    "mastery_level": 4,
+    "synonyms": [
+      { "synonym_text": "extraordinary" },
+      { "synonym_text": "remarkable" }
+    ],
+    "antonyms": [
+      { "antonym_text": "ordinary" },
+      { "antonym_text": "typical" }
+    ],
+    "audio_url": null
+  }
+]

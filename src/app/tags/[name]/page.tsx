@@ -9,9 +9,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 interface TagDetailPageProps {
-  params: {
+  params: Promise<{
     name: string;
-  };
+  }>;
 }
 
 export default async function TagDetailPage({ params }: TagDetailPageProps) {
@@ -21,7 +21,8 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
     return <div>Please sign in to view this tag.</div>;
   }
 
-  const tagName = decodeURIComponent(params.name);
+  const resolvedParams = await params;
+  const tagName = decodeURIComponent(resolvedParams.name);
   const supabase = createServerClient();
 
   // Get the tag info
@@ -43,15 +44,14 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
       vocabularies (
         id,
         word,
+        meaning,
+        definition,
         pronunciation,
         part_of_speech,
         difficulty,
         notes,
         created_at,
-        updated_at,
-        vocabulary_meanings (
-          meaning
-        )
+        updated_at
       )
     `)
     .eq('tag_id', tag.id)

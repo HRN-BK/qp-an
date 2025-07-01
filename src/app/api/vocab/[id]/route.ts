@@ -5,7 +5,7 @@ import { createServerClient } from "@/lib/supabase";
 export async function PATCH(request: NextRequest, { params }: any) {
   try {
     const { userId } = await auth();
-    const { id } = params;
+    const { id } = await params;
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -143,7 +143,7 @@ export async function PATCH(request: NextRequest, { params }: any) {
 export async function DELETE(request: NextRequest, { params }: any) {
   try {
     const { userId } = await auth();
-    const { id } = params;
+    const { id } = await params;
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

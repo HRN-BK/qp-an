@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createServerClient } from "@/lib/supabase";
+import { createServiceClient } from "@/lib/supabase";
 
 interface DraftItem {
   word: string;
   meaning: string;
   definition: string;
+  pronunciation?: string;
   part_of_speech?: string;
-  difficulty?: number;
+  difficulty?: string; // CEFR level
+  tags?: string[];
+  synonyms?: string[];
+  antonyms?: string[];
+  collocations?: string[];
 }
 
 export async function POST(request: NextRequest) {
@@ -28,12 +33,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = createServiceClient();
     const results = [];
 
     // Process each draft
     for (const draft of drafts) {
-      const { word, meaning, definition, part_of_speech, difficulty } = draft as DraftItem;
+      const { 
+        word, 
+        meaning, 
+        definition, 
+        pronunciation,
+        part_of_speech, 
+        difficulty,
+        tags = [],
+        synonyms = [],
+        antonyms = [],
+        collocations = []
+      } = draft as DraftItem;
 
       if (!word || !meaning) {
         console.warn(`Skipping draft with missing word or meaning:`, draft);
@@ -54,15 +70,43 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Create the vocabulary entry
+        // Create the vocabulary entry with comprehensive data
+        // Convert CEFR level to integer if needed
+        let difficultyValue = difficulty;
+        if (typeof difficulty === 'string') {
+          const cefrToNumber: { [key: string]: number } = {
+            'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'C1': 5, 'C2': 5
+          };
+          difficultyValue = cefrToNumber[difficulty] || 3;
+        }
+        
+        const vocabularyData: any = {
+          user_id: userId,
+          word,
+          meaning,
+          definition,
+          pronunciation,
+          part_of_speech,
+          difficulty: difficultyValue,
+        };
+        
+        // Add CEFR level if it's a string
+        if (typeof difficulty === 'string') {
+          vocabularyData.cefr_level = difficulty;
+        }
+        
+        // Only add extended fields if they exist
+        try {
+          vocabularyData.synonyms = synonyms;
+          vocabularyData.antonyms = antonyms;
+          vocabularyData.collocations = collocations;
+        } catch (e) {
+          console.log('Extended fields not available, continuing without them');
+        }
+
         const { data: vocabulary, error: vocabError } = await supabase
           .from('vocabularies')
-          .insert({
-            user_id: userId,
-            word,
-            part_of_speech,
-            difficulty,
-          })
+          .insert(vocabularyData)
           .select()
           .single();
 
@@ -71,18 +115,57 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Create the meaning entry
-        const { error: meaningError } = await supabase
-          .from('vocabulary_meanings')
-          .insert({
-            vocabulary_id: vocabulary.id,
-            meaning,
-            example_sentence: definition,
+        // Handle tags if provided
+        if (tags && Array.isArray(tags) && tags.length > 0) {
+          // First, create or get existing tags
+          const tagPromises = tags.map(async (tagName: string) => {
+            // Try to get existing tag first
+            const { data: existingTag } = await supabase
+              .from('tags')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('name', tagName)
+              .single();
+
+            if (existingTag) {
+              return existingTag.id;
+            }
+
+            // Create new tag if it doesn't exist
+            const { data: newTag, error: tagError } = await supabase
+              .from('tags')
+              .insert({
+                user_id: userId,
+                name: tagName,
+              })
+              .select('id')
+              .single();
+
+            if (tagError) {
+              console.error('Error creating tag:', tagError);
+              return null;
+            }
+
+            return newTag.id;
           });
 
-        if (meaningError) {
-          console.error(`Error creating meaning for "${word}":`, meaningError);
-          // Continue anyway as the vocabulary was created
+          const tagIds = (await Promise.all(tagPromises)).filter(Boolean);
+
+          // Create vocabulary-tag associations
+          if (tagIds.length > 0) {
+            const vocabularyTags = tagIds.map(tagId => ({
+              vocabulary_id: vocabulary.id,
+              tag_id: tagId,
+            }));
+
+            const { error: tagAssocError } = await supabase
+              .from('vocabulary_tags')
+              .insert(vocabularyTags);
+
+            if (tagAssocError) {
+              console.error('Error creating tag associations:', tagAssocError);
+            }
+          }
         }
 
         results.push({

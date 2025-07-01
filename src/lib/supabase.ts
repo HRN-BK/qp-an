@@ -1,5 +1,4 @@
-import { createBrowserClient as createClient, createServerClient as createServer } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { ENV } from './env';
 
 /**
@@ -21,25 +20,7 @@ export function createBrowserClient() {
  * Uses Next.js cookies and can inject Clerk JWT for RLS
  */
 export function createServerClient() {
-  const cookieStore = cookies();
-
-  return createServer(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        } catch {
-          // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
-        }
-      },
-    },
+  return createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -52,30 +33,37 @@ export function createServerClient() {
  * Injects the Clerk JWT token into the Authorization header
  */
 export function createServerClientWithAuth(clerkToken: string) {
-  const cookieStore = cookies();
-
-  return createServer(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+  return createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
     global: {
       headers: {
         Authorization: `Bearer ${clerkToken}`,
       },
     },
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        } catch {
-          // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
-        }
-      },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
     },
+  });
+}
+
+/**
+ * Create a Supabase service client with full database access
+ * Uses the service role key, bypassing RLS
+ */
+export function createServiceClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!serviceKey) {
+    console.warn('No service role key found, falling back to anon key');
+    return createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+  
+  return createClient(ENV.SUPABASE_URL, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

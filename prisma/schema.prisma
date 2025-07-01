@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,4 +9,100 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+model Tag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id   String
+  name      String
+  color     String   @default("#3b82f6")
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @db.Timestamptz
+  
+  vocabularies VocabularyTag[]
+  
+  @@unique([user_id, name])
+  @@map("tags")
+}
+
+model Vocabulary {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String
+  word            String
+  meaning         String
+  definition      String?
+  pronunciation   String?
+  part_of_speech  String?
+  other_meanings  Json      @default("[]") @db.JsonB
+  difficulty      Int       @default(3) @db.Integer
+  source_url      String?
+  notes           String?
+  
+  // Spaced repetition fields
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  first_review_date  DateTime? @db.Timestamptz
+  second_review_date DateTime? @db.Timestamptz
+  third_review_date  DateTime? @db.Timestamptz
+  fourth_review_date DateTime? @db.Timestamptz
+  fifth_review_date  DateTime? @db.Timestamptz
+  
+  // SM-2 Algorithm fields
+  last_reviewed   DateTime? @db.Timestamptz
+  next_review     DateTime? @db.Timestamptz
+  review_count    Int       @default(0)
+  ease_factor     Decimal   @default(2.50) @db.Decimal(3,2)
+  last_rating     Int?
+  
+  updated_at      DateTime  @default(now()) @db.Timestamptz
+  
+  tags         VocabularyTag[]
+  review_logs  ReviewLog[]
+  
+  @@unique([user_id, word])
+  @@map("vocabularies")
+}
+
+model VocabularyTag {
+  vocabulary_id String      @db.Uuid
+  tag_id        String      @db.Uuid
+  created_at    DateTime    @default(now()) @db.Timestamptz
+  
+  vocabulary    Vocabulary  @relation(fields: [vocabulary_id], references: [id], onDelete: Cascade)
+  tag           Tag         @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+  
+  @@id([vocabulary_id, tag_id])
+  @@map("vocabulary_tags")
+}
+
+model ReviewLog {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String
+  vocabulary_id       String      @db.Uuid
+  review_type         String      // 'first', 'second', 'third', 'fourth', 'fifth', 'manual'
+  quality             Int?        // 1=Again, 2=Hard, 3=Good, 4=Easy, 5=Perfect
+  time_spent_seconds  Int         @default(0)
+  correct             Boolean     @default(true)
+  created_at          DateTime    @default(now()) @db.Timestamptz
+  
+  vocabulary          Vocabulary  @relation(fields: [vocabulary_id], references: [id], onDelete: Cascade)
+  
+  @@map("review_logs")
+}
+
+model AiDraft {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String
+  word             String
+  meaning          String
+  definition       String?
+  suggested_tags   String[]  @default([])
+  other_meanings   Json      @default("[]") @db.JsonB
+  difficulty       Int       @default(3) @db.Integer
+  status           String    @default("pending") // 'pending', 'approved', 'rejected'
+  ai_model         String    @default("gpt-4o-mini")
+  source_passage   String?
+  created_at       DateTime  @default(now()) @db.Timestamptz
+  updated_at       DateTime  @default(now()) @db.Timestamptz
+  
+  @@map("ai_drafts")
 }

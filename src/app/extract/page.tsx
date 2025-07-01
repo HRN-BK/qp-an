@@ -17,6 +17,8 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Sparkles, Save, FileText } from "lucide-react";
+import { TextSelectionTool } from "@/components/TextSelectionTool";
+import { CEFRBadge } from "@/components/CEFRBadge";
 
 interface AIDraft {
   id?: string;
@@ -24,7 +26,16 @@ interface AIDraft {
   meaning: string;
   definition: string;
   part_of_speech?: string;
-  difficulty?: number;
+  difficulty?: string;
+  selected: boolean;
+}
+
+interface ExtractedWord {
+  word: string;
+  meaning: string;
+  definition: string;
+  part_of_speech?: string;
+  difficulty?: string;
   selected: boolean;
 }
 
@@ -42,38 +53,36 @@ export default function ExtractPage() {
 
     setIsExtracting(true);
     try {
-      // For now, simulate AI extraction with mock data
-      // In production, this would call a Supabase Edge Function
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API delay
-      
-      const mockDrafts: AIDraft[] = [
-        {
-          word: "serendipity",
-          meaning: "The occurrence of events by chance in a happy way",
-          definition: "A pleasant surprise; finding something good without looking for it",
-          part_of_speech: "noun",
-          difficulty: 4,
-          selected: true
+      const response = await fetch("/api/ai/extract", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        {
-          word: "ephemeral",
-          meaning: "Lasting for a very short time",
-          definition: "Something that exists briefly and then disappears",
-          part_of_speech: "adjective", 
-          difficulty: 5,
-          selected: true
-        },
-        {
-          word: "mellifluous",
-          meaning: "Sweet or musical; pleasant to hear",
-          definition: "Having a smooth, flowing sound that is pleasing to listen to",
-          part_of_speech: "adjective",
-          difficulty: 5,
-          selected: false
-        }
-      ];
+        body: JSON.stringify({ passage }),
+      });
 
-      setDrafts(mockDrafts);
+      if (!response.ok) {
+        throw new Error("Failed to extract vocabulary");
+      }
+
+      const result = await response.json();
+      const extractedDrafts: AIDraft[] = result.words.map((word: any) => ({
+        word: word.word,
+        meaning: word.meaning,
+        definition: word.definition,
+        part_of_speech: word.part_of_speech || "unknown",
+        difficulty: word.difficulty || "B1",
+        selected: true
+      }));
+
+      // Add to existing drafts, avoiding duplicates
+      setDrafts(prevDrafts => {
+        const existingWords = prevDrafts.map(d => d.word.toLowerCase());
+        const uniqueNewDrafts = extractedDrafts.filter(draft => 
+          !existingWords.includes(draft.word.toLowerCase())
+        );
+        return [...prevDrafts, ...uniqueNewDrafts];
+      });
     } catch (error) {
       console.error("Error extracting vocabulary:", error);
       alert("Failed to extract vocabulary. Please try again.");
@@ -128,6 +137,57 @@ export default function ExtractPage() {
     }
   };
 
+  const handleQuickWordAdd = async (wordInfo: any) => {
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/vocab", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          word: wordInfo.word,
+          meaning: wordInfo.meaning,
+          definition: wordInfo.definition,
+          difficulty: "B1",
+          tags: ["Quick Add"]
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add vocabulary");
+      }
+
+      alert(`Successfully added "${wordInfo.word}" to your vocabulary!`);
+    } catch (error) {
+      console.error("Error adding word:", error);
+      alert("Failed to add vocabulary. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleWordsExtracted = (extractedWords: ExtractedWord[]) => {
+    // Convert ExtractedWord[] to AIDraft[] and add to existing drafts
+    const newDrafts: AIDraft[] = extractedWords.map(word => ({
+      word: word.word,
+      meaning: word.meaning,
+      definition: word.definition,
+      part_of_speech: word.part_of_speech || "unknown",
+      difficulty: word.difficulty || "B1",
+      selected: word.selected
+    }));
+    
+    // Add to existing drafts, avoiding duplicates
+    setDrafts(prevDrafts => {
+      const existingWords = prevDrafts.map(d => d.word.toLowerCase());
+      const uniqueNewDrafts = newDrafts.filter(draft => 
+        !existingWords.includes(draft.word.toLowerCase())
+      );
+      return [...prevDrafts, ...uniqueNewDrafts];
+    });
+  };
+
   const selectedCount = drafts.filter(draft => draft.selected).length;
 
   return (
@@ -136,9 +196,15 @@ export default function ExtractPage() {
         <div>
           <h1 className="text-2xl font-bold">Extract Vocabulary</h1>
           <p className="text-muted-foreground">
-            Paste a passage and let AI extract vocabulary words for you
+            Select words from any text on this page or paste a passage to extract vocabulary
           </p>
         </div>
+
+        {/* Multiple Word Selection Tool */}
+        <TextSelectionTool 
+          mode="multiple" 
+          onWordsExtracted={handleWordsExtracted}
+        />
 
         {/* Input Section */}
         <Card>
@@ -245,13 +311,7 @@ export default function ExtractPage() {
                           </p>
                         </TableCell>
                         <TableCell>
-                          {draft.difficulty && (
-                            <Badge 
-                              variant={draft.difficulty >= 4 ? "destructive" : "secondary"}
-                            >
-                              Level {draft.difficulty}
-                            </Badge>
-                          )}
+                          <CEFRBadge level={draft.difficulty} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -269,11 +329,14 @@ export default function ExtractPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>1. Paste any text passage in the input area above</p>
-              <p>2. Click "Extract Vocabulary" to let AI identify vocabulary words</p>
-              <p>3. Review the extracted words and their definitions</p>
-              <p>4. Select the words you want to add to your collection</p>
-              <p>5. Click "Save Selected" to add them to your vocabulary</p>
+              <p><strong>Method 1 - Text Selection:</strong></p>
+              <p>1. Highlight English words/text anywhere on this page</p>
+              <p>2. Click "Add Selected Words" to collect them</p>
+              <p>3. Click "Process All Words" to get AI translations</p>
+              <p><strong>Method 2 - Passage Extraction:</strong></p>
+              <p>4. Paste text in the input area and click "Extract Vocabulary"</p>
+              <p>5. Review extracted words and select the ones you want</p>
+              <p>6. Click "Save Selected" to add them to your vocabulary</p>
             </div>
           </CardContent>
         </Card>

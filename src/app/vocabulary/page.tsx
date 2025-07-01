@@ -1,9 +1,12 @@
-import { auth } from "@/lib/auth";
-import { createServerClient } from "@/lib/supabase";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
+import { createBrowserClient } from "@/lib/supabase";
 import { VocabularyCard } from "@/components/VocabularyCard";
 import { ProtectedLayout } from "@/components/ProtectedLayout";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface Vocabulary {
@@ -11,31 +14,75 @@ interface Vocabulary {
   word: string;
   pronunciation?: string;
   part_of_speech?: string;
-  difficulty?: number;
+  difficulty?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
 }
 
-export default async function VocabularyPage() {
-  const { userId } = await auth();
+export default function VocabularyPage() {
+  const { user } = useUser();
+  const [vocabularies, setVocabularies] = useState<Vocabulary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  if (!userId) {
+  const fetchVocabularies = async () => {
+    if (!user?.id) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('vocabularies')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        throw error;
+      }
+
+      setVocabularies(data || []);
+    } catch (err) {
+      console.error('Error fetching vocabularies:', err);
+      setError('Error loading vocabularies.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVocabularies();
+  }, [user?.id]);
+
+  if (!user) {
     return <div>Please sign in to view vocabularies.</div>;
   }
 
-  const supabase = createServerClient();
-  
-  const { data: vocabularies, error } = await supabase
-    .from('vocabularies')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(50);
+  if (isLoading) {
+    return (
+      <ProtectedLayout>
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </ProtectedLayout>
+    );
+  }
 
   if (error) {
-    console.error('Error fetching vocabularies:', error);
-    return <div>Error loading vocabularies.</div>;
+    return (
+      <ProtectedLayout>
+        <div className="text-center py-12">
+          <p className="text-red-500">{error}</p>
+          <Button onClick={fetchVocabularies} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      </ProtectedLayout>
+    );
   }
 
   return (
@@ -56,6 +103,7 @@ export default async function VocabularyPage() {
               <VocabularyCard
                 key={vocab.id}
                 vocabulary={vocab}
+                onDelete={fetchVocabularies}
               />
             ))}
           </div>

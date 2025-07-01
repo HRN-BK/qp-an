@@ -35,8 +35,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/dialog";
-import { Edit, Save, Trash2, RotateCcw, Frown, Smile, X } from "lucide-react";
+} from "@/components/ui/alert-dialog";
+import { Edit, Save, Trash2, RotateCcw, Frown, Smile, X, Volume2 } from "lucide-react";
+import { playPronunciation, setUserInteractionDetected } from "@/lib/audio-utils";
 
 const vocabularySchema = z.object({
   word: z.string().min(1, "Word is required"),
@@ -72,17 +73,18 @@ export function VocabularyDetailClient({ vocabulary, reviews }: VocabularyDetail
       part_of_speech: vocabulary.part_of_speech || "",
       meaning: vocabulary.vocabulary_meanings?.[0]?.meaning || "",
       definition: vocabulary.vocabulary_meanings?.[0]?.example_sentence || "",
-      difficulty: vocabulary.difficulty?.toString() || "",
+      difficulty: vocabulary.difficulty || "",
       notes: vocabulary.notes || "",
     },
   });
 
   const difficultyColors = {
-    1: "bg-green-100 text-green-800",
-    2: "bg-blue-100 text-blue-800", 
-    3: "bg-yellow-100 text-yellow-800",
-    4: "bg-orange-100 text-orange-800",
-    5: "bg-red-100 text-red-800",
+    'A1': "bg-green-100 text-green-800",
+    'A2': "bg-blue-100 text-blue-800", 
+    'B1': "bg-yellow-100 text-yellow-800",
+    'B2': "bg-orange-100 text-orange-800",
+    'C1': "bg-red-100 text-red-800",
+    'C2': "bg-purple-100 text-purple-800",
   };
 
   const reviewQualityLabels = {
@@ -102,7 +104,7 @@ export function VocabularyDetailClient({ vocabulary, reviews }: VocabularyDetail
         body: JSON.stringify({
           ...data,
           tags,
-          difficulty: data.difficulty ? parseInt(data.difficulty) : undefined,
+          difficulty: data.difficulty,
         }),
       });
 
@@ -180,6 +182,11 @@ export function VocabularyDetailClient({ vocabulary, reviews }: VocabularyDetail
       e.preventDefault();
       addTag();
     }
+  };
+
+  const handlePlayPronunciation = async () => {
+    setUserInteractionDetected(); // Ensure autoplay restrictions are managed
+    await playPronunciation(vocabulary.word, vocabulary.audio_url);
   };
 
   if (isEditing) {
@@ -321,19 +328,20 @@ export function VocabularyDetailClient({ vocabulary, reviews }: VocabularyDetail
                 name="difficulty"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Difficulty Level</FormLabel>
+                    <FormLabel>CEFR Level</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select difficulty" />
+                          <SelectValue placeholder="Select CEFR level" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="1">1 - Beginner</SelectItem>
-                        <SelectItem value="2">2 - Elementary</SelectItem>
-                        <SelectItem value="3">3 - Intermediate</SelectItem>
-                        <SelectItem value="4">4 - Advanced</SelectItem>
-                        <SelectItem value="5">5 - Expert</SelectItem>
+                        <SelectItem value="A1">A1 - Beginner</SelectItem>
+                        <SelectItem value="A2">A2 - Elementary</SelectItem>
+                        <SelectItem value="B1">B1 - Intermediate</SelectItem>
+                        <SelectItem value="B2">B2 - Upper Intermediate</SelectItem>
+                        <SelectItem value="C1">C1 - Advanced</SelectItem>
+                        <SelectItem value="C2">C2 - Proficient</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -382,11 +390,19 @@ export function VocabularyDetailClient({ vocabulary, reviews }: VocabularyDetail
                   variant="secondary"
                   className={difficultyColors[vocabulary.difficulty as keyof typeof difficultyColors]}
                 >
-                  Level {vocabulary.difficulty}
+                  {vocabulary.difficulty}
                 </Badge>
               )}
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePlayPronunciation}
+              >
+                <Volume2 className="h-4 w-4 mr-2" />
+                Play
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -406,7 +422,7 @@ export function VocabularyDetailClient({ vocabulary, reviews }: VocabularyDetail
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Vocabulary</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to delete "{vocabulary.word}"? This action cannot be undone.
+                      Are you sure you want to delete &quot;{vocabulary.word}&quot;? This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

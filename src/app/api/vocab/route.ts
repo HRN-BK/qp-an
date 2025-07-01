@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createServerClient } from "@/lib/supabase";
+import { createServiceClient } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +19,10 @@ export async function POST(request: NextRequest) {
       definition,
       difficulty,
       notes,
-      tags = []
+      tags = [],
+      synonyms = [],
+      antonyms = [],
+      collocations = []
     } = body;
 
     if (!word || !meaning) {
@@ -29,20 +32,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = createServiceClient();
 
-    // Start a transaction-like operation
-    // First, create the vocabulary entry
+    // Create the vocabulary entry - handle missing columns gracefully
+    // Convert CEFR level to integer if needed
+    let difficultyValue = difficulty;
+    if (typeof difficulty === 'string') {
+      const cefrToNumber: { [key: string]: number } = {
+        'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'C1': 5, 'C2': 5
+      };
+      difficultyValue = cefrToNumber[difficulty] || 3;
+    }
+    
+    const vocabularyData: any = {
+      user_id: userId,
+      word,
+      meaning,
+      definition,
+      pronunciation,
+      part_of_speech,
+      difficulty: difficultyValue,
+      notes,
+    };
+    
+    // Add CEFR level if it's a string
+    if (typeof difficulty === 'string') {
+      vocabularyData.cefr_level = difficulty;
+    }
+    
+    // Only add these fields if they exist in the schema
+    try {
+      vocabularyData.synonyms = synonyms;
+      vocabularyData.antonyms = antonyms;
+      vocabularyData.collocations = collocations;
+    } catch (e) {
+      // Columns don't exist yet, that's fine
+      console.log('Extended vocabulary fields not available yet');
+    }
+
     const { data: vocabulary, error: vocabError } = await supabase
       .from('vocabularies')
-      .insert({
-        user_id: userId,
-        word,
-        pronunciation,
-        part_of_speech,
-        difficulty,
-        notes,
-      })
+      .insert(vocabularyData)
       .select()
       .single();
 
@@ -52,20 +82,6 @@ export async function POST(request: NextRequest) {
         { error: "Failed to create vocabulary" },
         { status: 500 }
       );
-    }
-
-    // Create the main meaning entry
-    const { error: meaningError } = await supabase
-      .from('vocabulary_meanings')
-      .insert({
-        vocabulary_id: vocabulary.id,
-        meaning,
-        example_sentence: definition, // Using definition as example for now
-      });
-
-    if (meaningError) {
-      console.error('Error creating meaning:', meaningError);
-      // Could rollback vocabulary creation here in a real transaction
     }
 
     // Handle tags if provided

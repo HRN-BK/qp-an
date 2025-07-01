@@ -32,20 +32,37 @@ export async function GET(request: NextRequest) {
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are a comprehensive dictionary assistant. When given a word, provide detailed vocabulary information in JSON format. Always respond with valid JSON containing these exact keys:
-          - "meaning": A concise, clear definition of the word's primary meaning
-          - "definition": A more detailed explanation with context
-          - "other_meanings": An array of alternative meanings or uses of the word
+          content: `You are a comprehensive English-Vietnamese dictionary assistant. When given an English word, provide detailed vocabulary information in JSON format. Always respond with valid JSON containing these exact keys:
+          - "meaning": The Vietnamese translation/meaning of the word (in Vietnamese)
+          - "definition": A detailed English definition and explanation (in English)
+          - "pronunciation": IPA phonetic transcription of the word (e.g., /wɜːrd/)
+          - "part_of_speech": The grammatical category (noun, verb, adjective, adverb, etc.)
+          - "cefr_level": CEFR difficulty level (A1, A2, B1, B2, C1, C2)
+          - "tags": An array of relevant category tags (e.g., ["Academic", "Business", "Everyday"])
+          - "synonyms": An array of English synonyms
+          - "antonyms": An array of English antonyms
+          - "collocations": An array of common English phrases or collocations with this word
+          - "examples": An array of exactly 3 natural English example sentences using the word
+          - "other_meanings": An array of alternative Vietnamese meanings (in Vietnamese)
           
-          Focus on accuracy and educational value. If the word has multiple common meanings, prioritize the most frequently used one for the main meaning.`
+          Important rules:
+          - "meaning" MUST be in Vietnamese language
+          - "definition" MUST be in English language with detailed explanation
+          - "other_meanings" MUST be in Vietnamese language
+          - "pronunciation" should be in IPA format
+          - "cefr_level" should be one of: A1, A2, B1, B2, C1, C2
+          - "tags" should be relevant categories in English
+          - "synonyms", "antonyms", "collocations" should be in English
+          - Focus on accuracy and educational value
+          - If the word has multiple common meanings, prioritize the most frequently used one for the main meaning`
         },
         {
           role: "user",
-          content: `Give me detailed vocabulary information for the word: "${word}"`
+          content: `Give me Vietnamese meaning and English definition for the English word: "${word}"`
         }
       ],
       temperature: 0.3,
@@ -59,16 +76,31 @@ export async function GET(request: NextRequest) {
 
     let aiResponse;
     try {
-      aiResponse = JSON.parse(content);
+      // Remove markdown code blocks if present
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```json')) {
+        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      aiResponse = JSON.parse(cleanContent);
     } catch (parseError) {
       console.error("Failed to parse OpenAI response:", content);
       throw new Error("Invalid JSON response from AI");
     }
 
-    // Validate response structure
+    // Validate response structure and provide comprehensive data
     const response = {
       meaning: aiResponse.meaning || "No meaning provided",
-      definition: aiResponse.definition || "No definition provided", 
+      definition: aiResponse.definition || "No definition provided",
+      pronunciation: aiResponse.pronunciation || "",
+      part_of_speech: aiResponse.part_of_speech || "",
+      cefr_level: aiResponse.cefr_level || "B1",
+      tags: Array.isArray(aiResponse.tags) ? aiResponse.tags : [],
+      synonyms: Array.isArray(aiResponse.synonyms) ? aiResponse.synonyms : [],
+      antonyms: Array.isArray(aiResponse.antonyms) ? aiResponse.antonyms : [],
+      collocations: Array.isArray(aiResponse.collocations) ? aiResponse.collocations : [],
       other_meanings: Array.isArray(aiResponse.other_meanings) 
         ? aiResponse.other_meanings 
         : []
@@ -89,6 +121,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       meaning: "Unable to get AI suggestion at this time",
       definition: "Please try again later or enter the meaning manually",
+      pronunciation: "",
+      part_of_speech: "",
+      cefr_level: "B1",
+      tags: [],
+      synonyms: [],
+      antonyms: [],
+      collocations: [],
       other_meanings: []
     });
   }

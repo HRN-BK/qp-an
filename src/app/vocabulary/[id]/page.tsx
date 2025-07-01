@@ -8,15 +8,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 interface VocabularyDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function VocabularyDetailPage({
   params,
 }: VocabularyDetailPageProps) {
   const { userId } = await auth();
+  const { id } = await params;
   
   if (!userId) {
     return <div>Please sign in to view this vocabulary.</div>;
@@ -44,7 +45,7 @@ export default async function VocabularyDetailPage({
         )
       )
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', userId)
     .single();
 
@@ -56,7 +57,7 @@ export default async function VocabularyDetailPage({
   const { data: reviews } = await supabase
     .from('review_logs')
     .select('*')
-    .eq('vocabulary_id', params.id)
+    .eq('vocabulary_id', id)
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(5);
