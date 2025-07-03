@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 
-export type GameMode = 'listening' | 'translation' | 'synonym' | 'fill_blank';
+export type GameMode = 'listening' | 'translation' | 'synonym' | 'fill_blank' | 'context_write' | 'context_fill';
 
 export interface Vocabulary {
   id: number;
@@ -46,6 +46,9 @@ export interface GameSessionState {
   consecutiveIncorrectMap: Map<number, number>;
   gameSessionId: string;
   isComplete: boolean;
+  aiFeedback: string | null;
+  isLoadingAI: boolean;
+  aiError: string | null;
 }
 
 export interface GameSessionActions {
@@ -63,6 +66,9 @@ export interface GameSessionActions {
   setUserInput: (input: string) => void;
   setStartTime: (time: number) => void;
   addToReviewQueue: (vocab: Vocabulary, mode: GameMode) => void;
+  setAiFeedback: (feedback: string | null) => void;
+  setIsLoadingAI: (loading: boolean) => void;
+  setAiError: (error: string | null) => void;
 }
 
 export interface UseGameSessionReturn {
@@ -84,7 +90,10 @@ export function useGameSession(totalVocabularies: number = 0): UseGameSessionRet
     reviewQueue: [],
     consecutiveIncorrectMap: new Map(),
     gameSessionId: Math.random().toString(36).substring(7),
-    isComplete: false
+    isComplete: false,
+    aiFeedback: null,
+    isLoadingAI: false,
+    aiError: null
   });
 
   const submit = useCallback(async (answer: string, vocabulary: Vocabulary, mode: GameMode) => {
@@ -116,6 +125,16 @@ export function useGameSession(totalVocabularies: number = 0): UseGameSessionRet
         break;
         
       case 'fill_blank':
+        correctAnswer = vocabulary.word;
+        isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        break;
+        
+      case 'context_write':
+        correctAnswer = vocabulary.word;
+        isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        break;
+        
+      case 'context_fill':
         correctAnswer = vocabulary.word;
         isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
         break;
@@ -241,7 +260,10 @@ export function useGameSession(totalVocabularies: number = 0): UseGameSessionRet
       reviewQueue: [],
       consecutiveIncorrectMap: new Map(),
       gameSessionId: Math.random().toString(36).substring(7),
-      isComplete: false
+      isComplete: false,
+      aiFeedback: null,
+      isLoadingAI: false,
+      aiError: null
     });
   }, []);
 
@@ -289,6 +311,18 @@ export function useGameSession(totalVocabularies: number = 0): UseGameSessionRet
     });
   }, []);
 
+  const setAiFeedback = useCallback((feedback: string | null) => {
+    setState(prev => ({ ...prev, aiFeedback: feedback }));
+  }, []);
+
+  const setIsLoadingAI = useCallback((loading: boolean) => {
+    setState(prev => ({ ...prev, isLoadingAI: loading }));
+  }, []);
+
+  const setAiError = useCallback((error: string | null) => {
+    setState(prev => ({ ...prev, aiError: error }));
+  }, []);
+
   const actions: GameSessionActions = {
     submit,
     next,
@@ -298,7 +332,10 @@ export function useGameSession(totalVocabularies: number = 0): UseGameSessionRet
     setSelectedAnswer,
     setUserInput,
     setStartTime,
-    addToReviewQueue
+    addToReviewQueue,
+    setAiFeedback,
+    setIsLoadingAI,
+    setAiError
   };
 
   return {

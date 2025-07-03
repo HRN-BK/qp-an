@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { ENV } from '@/lib/env';
+import { createServiceClient } from '@/lib/supabase';
 
-const supabase = createClient(
-  ENV.NEXT_PUBLIC_SUPABASE_URL,
-  ENV.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createServiceClient();
 
 export async function POST(request: NextRequest) {
   try {

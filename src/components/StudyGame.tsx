@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Volume2, Check, X, RotateCcw, Zap, Target, Trophy, BookOpen, Eye, Headphones, LanguagesIcon, FileText } from 'lucide-react';
+import { Volume2, Check, X, RotateCcw, Zap, Target, Trophy, BookOpen, Eye, Headphones, LanguagesIcon, FileText, Save } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { playPronunciation, setUserInteractionDetected } from '@/lib/audio-utils';
+import { useQuizAutoSave } from '@/hooks/useQuizAutoSave';
 
 interface Vocabulary {
   id: number;
@@ -30,13 +32,19 @@ interface StudyGameProps {
 
 interface GameResult {
   vocabularyId: number;
-  activityType: 'listening' | 'translation' | 'synonym' | 'fill_blank';
+  activityType: GameMode;
   isCorrect: boolean;
   responseTime: number;
   userAnswer: string;
+  aiScore?: number;
+  aiFeedback?: string;
+  aiSuggestions?: {
+    improvements: string[];
+    collocations: string[];
+  };
 }
 
-type GameMode = 'listening' | 'translation' | 'synonym' | 'fill_blank';
+type GameMode = 'listening' | 'translation' | 'synonym' | 'fill_blank' | 'context_write' | 'context_fill';
 
 interface ReviewQueueItem {
   vocab: Vocabulary;
@@ -57,9 +65,16 @@ interface GameState {
   reviewQueue: ReviewQueueItem[];
   consecutiveIncorrectMap: Map<number, number>;
   gameSessionId: string;
+  aiFeedback: string | null;
+  isLoadingAI: boolean;
+  aiError: string | null;
+  generatedSentence: string | null;
+  isLoadingSentence: boolean;
+  sentenceError: string | null;
 }
 
 import { ResultCard } from './ResultCard';
+import { QuizResultsDetail } from './QuizResultsDetail';
 
 export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) {
   const [gameState, setGameState] = useState<GameState>({
@@ -74,7 +89,13 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
     startTime: Date.now(),
     reviewQueue: [],
     consecutiveIncorrectMap: new Map(),
-    gameSessionId: Math.random().toString(36).substring(7)
+    gameSessionId: Math.random().toString(36).substring(7),
+    aiFeedback: null,
+    isLoadingAI: false,
+    aiError: null,
+    generatedSentence: null,
+    isLoadingSentence: false,
+    sentenceError: null
   });
 
   const [currentOptions, setCurrentOptions] = useState<string[]>([]);
@@ -85,10 +106,37 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
     result: GameResult;
     correctAnswer: string;
     masteryChange: number;
+    aiScore?: number;
+    aiFeedback?: string;
+    aiSuggestions?: {
+      improvements: string[];
+      collocations: string[];
+    };
   } | null>(null);
 
-  // Game modes with weights for random selection
-  const gameModes: GameMode[] = ['listening', 'translation', 'synonym', 'fill_blank'];
+  // Auto-save functionality
+  const { saveProgress, isSaving } = useQuizAutoSave({
+    sessionId: gameState.gameSessionId,
+    results: gameState.results,
+    currentIndex: gameState.currentIndex,
+    totalVocabularies: vocabularies.length,
+    score: gameState.score,
+    streak: gameState.streak,
+    isComplete: gameComplete,
+    enabled: true,
+    saveIntervalMs: 30000 // Save every 30 seconds
+  });
+
+
+  // Game modes with weighted selection for variety
+  const gameModes: { mode: GameMode; weight: number }[] = [
+    { mode: 'listening', weight: 3 },
+    { mode: 'translation', weight: 3 },
+    { mode: 'synonym', weight: 2 },
+    { mode: 'fill_blank', weight: 3 },
+    { mode: 'context_write', weight: 2 },
+    { mode: 'context_fill', weight: 2 }
+  ];
 
   useEffect(() => {
     if (vocabularies.length > 0 && gameState.currentIndex < vocabularies.length) {
@@ -97,10 +145,25 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
   }, [gameState.currentIndex, vocabularies]);
 
   const getRandomMode = (): GameMode => {
-    return gameModes[Math.floor(Math.random() * gameModes.length)];
+    // Calculate total weight
+    const totalWeight = gameModes.reduce((sum, item) => sum + item.weight, 0);
+    
+    // Generate random number between 0 and total weight
+    let random = Math.random() * totalWeight;
+    
+    // Find the selected mode based on weight
+    for (const { mode, weight } of gameModes) {
+      random -= weight;
+      if (random <= 0) {
+        return mode;
+      }
+    }
+    
+    // Fallback (should never reach here)
+    return gameModes[0].mode;
   };
 
-  const setupNewQuestion = useCallback(() => {
+  const setupNewQuestion = useCallback(async () => {
     let vocab: Vocabulary;
     let mode: GameMode;
 
@@ -136,8 +199,41 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
       selectedAnswer: '',
       userInput: '',
       showResult: false,
-      startTime: Date.now()
+      startTime: Date.now(),
+      generatedSentence: null,
+      isLoadingSentence: mode === 'context_fill',
+      sentenceError: null
     }));
+
+    // Generate sentence for context_fill mode
+    if (mode === 'context_fill') {
+      try {
+        const response = await fetch('/api/vocab/generate-sentence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vocabularyId: vocab.id })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setGameState(prev => ({
+            ...prev,
+            generatedSentence: data.sentenceWithBlank,
+            isLoadingSentence: false
+          }));
+        } else {
+          throw new Error('Failed to generate sentence');
+        }
+      } catch (error) {
+        console.error('Error generating sentence:', error);
+        setGameState(prev => ({
+          ...prev,
+          generatedSentence: null,
+          isLoadingSentence: false,
+          sentenceError: 'Failed to generate sentence'
+        }));
+      }
+    }
   }, [gameState.currentIndex, gameState.reviewQueue, vocabularies]);
 
   const generateOptions = (vocab: Vocabulary, mode: GameMode): string[] => {
@@ -178,8 +274,14 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
         }
         break;
         
-      case 'fill_blank':
+        case 'fill_blank':
         return []; // No options needed for fill blank mode
+        
+      case 'context_write':
+        return []; // No options needed for context write mode
+        
+      case 'context_fill':
+        return []; // No options needed for context fill mode
     }
 
     return [correctAnswer, ...wrongAnswers].sort(() => Math.random() - 0.5);
@@ -229,15 +331,81 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
         correctAnswer = currentVocab.word;
         isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
         break;
+        
+      case 'context_write':
+        userAnswer = gameState.userInput.trim();
+        correctAnswer = currentVocab.word;
+        // For context_write, initial validation - will be overridden by AI
+        isCorrect = userAnswer.toLowerCase().includes(correctAnswer.toLowerCase());
+        break;
+        
+      case 'context_fill':
+        userAnswer = gameState.userInput.trim();
+        correctAnswer = currentVocab.word;
+        // For context_fill, initial validation - will be overridden by AI
+        isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        break;
     }
 
-    const result: GameResult = {
+    let result: GameResult = {
       vocabularyId: currentVocab.id,
       activityType: gameState.mode,
       isCorrect,
       responseTime,
       userAnswer
     };
+
+    // For AI-enabled modes, get AI feedback and update result
+    let aiScore: number | undefined;
+    let aiFeedback: string | undefined;
+    let aiSuggestions: { improvements: string[]; collocations: string[] } | undefined;
+    
+    if (gameState.mode === 'context_write' || gameState.mode === 'context_fill') {
+      try {
+        setGameState(prev => ({ ...prev, isLoadingAI: true, aiError: null }));
+        
+        const sentenceForAI = gameState.mode === 'context_fill' && gameState.generatedSentence
+          ? gameState.generatedSentence.replace('______', userAnswer)
+          : userAnswer;
+        
+        const aiResponse = await fetch('/api/vocab/ai-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vocabularyId: currentVocab.id,
+            mode: gameState.mode,
+            userSentence: sentenceForAI
+          })
+        });
+        
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json();
+          aiScore = aiData.score;
+          aiFeedback = aiData.feedback;
+          aiSuggestions = aiData.suggestions;
+          
+          // Update isCorrect based on AI score (>= 7 is correct)
+          isCorrect = aiScore >= 7;
+          
+          // Update result with AI data
+          result = {
+            ...result,
+            isCorrect,
+            aiScore,
+            aiFeedback,
+            aiSuggestions
+          };
+        } else {
+          console.error('AI feedback API failed:', aiResponse.status);
+          setGameState(prev => ({ ...prev, aiError: 'Failed to get AI feedback' }));
+        }
+      } catch (error) {
+        console.error('Error getting AI feedback:', error);
+        setGameState(prev => ({ ...prev, aiError: 'Error getting AI feedback' }));
+      } finally {
+        setGameState(prev => ({ ...prev, isLoadingAI: false }));
+      }
+    }
 
     // Update consecutive incorrect tracking
     const newConsecutiveIncorrectMap = new Map(gameState.consecutiveIncorrectMap);
@@ -255,18 +423,25 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
     // Call the review API
     let masteryChange = 0;
     try {
+      const reviewPayload: any = {
+        vocabularyId: currentVocab.id,
+        isCorrect,
+        activityType: gameState.mode,
+        responseTimeMs: responseTime,
+        userAnswer,
+        sessionId: gameState.gameSessionId,
+        shouldLowerMastery // Pass the lowering flag only when count==2
+      };
+      
+      // For new modes with AI feedback, pass the score (1-10) for quality mapping
+      if (aiScore !== undefined) {
+        reviewPayload.score = aiScore;
+      }
+      
       const apiResponse = await fetch('/api/vocab/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vocabularyId: currentVocab.id,
-          isCorrect,
-          activityType: gameState.mode,
-          responseTimeMs: responseTime,
-          userAnswer,
-          sessionId: gameState.gameSessionId,
-          shouldLowerMastery // Pass the lowering flag only when count==2
-        })
+        body: JSON.stringify(reviewPayload)
       });
 
       if (apiResponse.ok) {
@@ -282,7 +457,10 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
       vocab: currentVocab,
       result,
       correctAnswer,
-      masteryChange
+      masteryChange,
+      aiScore,
+      aiFeedback,
+      aiSuggestions
     });
 
     setGameState(prev => {
@@ -466,6 +644,125 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
           </div>
         );
 
+      case 'context_write':
+        return (
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-base md:text-lg mb-2" id="context-write-instruction">Write a sentence using this word:</p>
+              <p className="text-xl md:text-2xl font-bold text-green-600 mb-4" aria-label={`Word to use: ${currentVocab.word}`}>{currentVocab.word}</p>
+            </div>
+            
+            {/* Context section with meaning and definition */}
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-green-700 dark:text-green-300 font-medium">💡 Context:</p>
+                {currentVocab.meaning && (
+                  <div className="flex items-center justify-center gap-2">
+                    <LanguagesIcon className="h-4 w-4 text-green-600" />
+                    <p className="text-sm md:text-base text-green-800 dark:text-green-200 font-medium">
+                      Vietnamese: <span className="italic">{currentVocab.meaning}</span>
+                    </p>
+                  </div>
+                )}
+                {currentVocab.definition && (
+                  <div className="flex items-center justify-center gap-2">
+                    <FileText className="h-4 w-4 text-green-600" />
+                    <p className="text-sm md:text-base text-green-800 dark:text-green-200">
+                      Definition: <span className="italic">{currentVocab.definition}</span>
+                    </p>
+                  </div>
+                )}
+                {currentVocab.example && (
+                  <div className="text-sm md:text-base text-green-800 dark:text-green-200">
+                    <p>Example: <span className="italic">"{currentVocab.example}"</span></p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <Textarea
+              value={gameState.userInput}
+              onChange={(e) => setGameState(prev => ({ ...prev, userInput: e.target.value }))}
+              placeholder="Write your sentence here..."
+              className="text-center text-base md:text-lg min-h-20"
+              onKeyDown={(e) => e.key === 'Enter' && e.shiftKey === false && handleSubmit()}
+              aria-describedby="context-write-instruction"
+              aria-label="Sentence writing input"
+            />
+          </div>
+        );
+
+      case 'context_fill':
+        return (
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-base md:text-lg mb-2" id="context-fill-instruction">Complete the sentence with the appropriate word:</p>
+              
+              {gameState.isLoadingSentence ? (
+                <div className="text-lg md:text-xl italic bg-purple-50 dark:bg-purple-800 p-3 md:p-4 rounded-lg">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                    <span>Generating sentence...</span>
+                  </div>
+                </div>
+              ) : gameState.sentenceError ? (
+                <div className="text-lg md:text-xl italic bg-red-50 dark:bg-red-800 p-3 md:p-4 rounded-lg text-red-700 dark:text-red-200">
+                  Error: {gameState.sentenceError}
+                  <br />
+                  <small>Fallback: Complete the sentence with "{currentVocab.word}"</small>
+                </div>
+              ) : gameState.generatedSentence ? (
+                <p className="text-lg md:text-xl italic bg-purple-50 dark:bg-purple-800 p-3 md:p-4 rounded-lg" aria-label={`Context sentence with blank: ${gameState.generatedSentence}`}>
+                  "{gameState.generatedSentence}"
+                </p>
+              ) : (
+                <p className="text-lg md:text-xl italic bg-purple-50 dark:bg-purple-800 p-3 md:p-4 rounded-lg">
+                  "Fill in the blank with the word: {currentVocab.word}"
+                </p>
+              )}
+            </div>
+            
+            {/* Enhanced hints section */}
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-purple-700 dark:text-purple-300 font-medium">💡 Contextual Hints:</p>
+                {currentVocab.meaning && (
+                  <div className="flex items-center justify-center gap-2">
+                    <LanguagesIcon className="h-4 w-4 text-purple-600" />
+                    <p className="text-sm md:text-base text-purple-800 dark:text-purple-200 font-medium">
+                      Vietnamese: <span className="italic">{currentVocab.meaning}</span>
+                    </p>
+                  </div>
+                )}
+                {currentVocab.definition && (
+                  <div className="flex items-center justify-center gap-2">
+                    <FileText className="h-4 w-4 text-purple-600" />
+                    <p className="text-sm md:text-base text-purple-800 dark:text-purple-200">
+                      Definition: <span className="italic">{currentVocab.definition}</span>
+                    </p>
+                  </div>
+                )}
+                {currentVocab.pronunciation_ipa && (
+                  <div className="text-sm md:text-base text-purple-800 dark:text-purple-200">
+                    <p>Pronunciation: <span className="italic">{currentVocab.pronunciation_ipa}</span></p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <Input
+              value={gameState.userInput}
+              onChange={(e) => setGameState(prev => ({ ...prev, userInput: e.target.value }))}
+              placeholder="Type the missing word..."
+              className="text-center text-base md:text-lg"
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+              aria-describedby="context-fill-instruction"
+              aria-label="Context fill input"
+              disabled={gameState.isLoadingSentence}
+            />
+          </div>
+        );
+
       default:
         return null;
     }
@@ -473,43 +770,35 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
 
 
   if (gameComplete) {
-    const accuracy = gameState.results.length > 0 
-      ? (gameState.results.filter(r => r.isCorrect).length / gameState.results.length) * 100 
-      : 0;
-
     return (
-      <Card className="text-center p-6">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-center gap-2 text-2xl">
-            <Trophy className="h-8 w-8 text-yellow-500" />
-            Study Session Complete!
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-blue-600">{gameState.score}</div>
-              <div className="text-sm text-gray-600">Score</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-green-600">{accuracy.toFixed(1)}%</div>
-              <div className="text-sm text-gray-600">Accuracy</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-purple-600">{Math.max(...gameState.results.map((_, i) => gameState.results.slice(0, i + 1).reverse().findIndex(r => !r.isCorrect) === -1 ? i + 1 : gameState.results.slice(0, i + 1).reverse().findIndex(r => !r.isCorrect)))}</div>
-              <div className="text-sm text-gray-600">Best Streak</div>
-            </div>
-          </div>
-          
-          <Button 
-            onClick={() => onComplete(gameState.results)}
-            size="lg"
-            className="w-full"
-          >
-            Finish Session
-          </Button>
-        </CardContent>
-      </Card>
+      <QuizResultsDetail 
+        vocabularies={vocabularies}
+        results={gameState.results}
+        onRestart={() => {
+          setGameState({
+            currentIndex: 0,
+            mode: 'listening',
+            score: 0,
+            streak: 0,
+            results: [],
+            showResult: false,
+            selectedAnswer: '',
+            userInput: '',
+            startTime: Date.now(),
+            reviewQueue: [],
+            consecutiveIncorrectMap: new Map(),
+            gameSessionId: Math.random().toString(36).substring(7),
+            aiFeedback: null,
+            isLoadingAI: false,
+            aiError: null,
+            generatedSentence: null,
+            isLoadingSentence: false,
+            sentenceError: null
+          });
+          setGameComplete(false);
+        }}
+        onContinue={() => onComplete(gameState.results)}
+      />
     );
   }
 
@@ -533,10 +822,28 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
                 <Target className="h-3 w-3 md:h-4 md:w-4 text-blue-500" />
                 <span className="text-xs md:text-sm">Score: {gameState.score}</span>
               </div>
+              {isSaving && (
+                <div className="flex items-center gap-1 md:gap-2" role="status" aria-label="Saving progress">
+                  <Save className="h-3 w-3 md:h-4 md:w-4 text-green-500 animate-pulse" />
+                  <span className="text-xs md:text-sm text-green-600">Saving...</span>
+                </div>
+              )}
             </div>
-            <div className="text-xs md:text-sm text-gray-600" role="status" aria-label={`Progress: question ${gameState.currentIndex + 1} of ${vocabularies.length}`}>
-              {gameState.currentIndex + 1} / {vocabularies.length}
-              {gameState.reviewQueue.length > 0 && ` (+${gameState.reviewQueue.length} review)`}
+            <div className="flex items-center gap-2">
+              <div className="text-xs md:text-sm text-gray-600" role="status" aria-label={`Progress: question ${gameState.currentIndex + 1} of ${vocabularies.length}`}>
+                {gameState.currentIndex + 1} / {vocabularies.length}
+                {gameState.reviewQueue.length > 0 && ` (+${gameState.reviewQueue.length} review)`}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={saveProgress}
+                disabled={isSaving}
+                className="h-6 px-2 text-xs"
+                title="Save progress manually"
+              >
+                <Save className="h-3 w-3" />
+              </Button>
             </div>
           </div>
           <Progress value={progress} className="h-1.5 md:h-2" aria-label={`Study progress: ${Math.round(progress)}% complete`} />
@@ -554,13 +861,29 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
                 onClick={handleSubmit}
                 disabled={
                   (gameState.mode === 'listening' || gameState.mode === 'synonym') && !gameState.selectedAnswer ||
-                  (gameState.mode === 'translation' || gameState.mode === 'fill_blank') && !gameState.userInput.trim()
+                  (gameState.mode === 'translation' || gameState.mode === 'fill_blank' || gameState.mode === 'context_write' || gameState.mode === 'context_fill') && !gameState.userInput.trim() ||
+                  gameState.mode === 'context_fill' && gameState.isLoadingSentence ||
+                  gameState.isLoadingAI
                 }
                 size="lg"
               >
-                Submit Answer
+                {gameState.isLoadingAI ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Getting AI Feedback...</span>
+                  </div>
+                ) : (
+                  'Submit Answer'
+                )}
               </Button>
             </div>
+            
+            {/* AI Error Display */}
+            {gameState.aiError && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
+                {gameState.aiError}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -575,6 +898,9 @@ export default function StudyGame({ vocabularies, onComplete }: StudyGameProps) 
           activityType={lastResult.result.activityType}
           responseTime={lastResult.result.responseTime}
           masteryChange={lastResult.masteryChange}
+          aiScore={lastResult.aiScore}
+          aiFeedback={lastResult.aiFeedback}
+          aiSuggestions={lastResult.aiSuggestions}
           onContinue={nextQuestion}
         />
       )}

@@ -12,19 +12,32 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { vocabularyId, isCorrect, masteryLevel, sessionId, activityType = 'flashcard', responseTimeMs, userAnswer, shouldLowerMastery } = body;
+    const { vocabularyId, rating, isCorrect, masteryLevel, sessionId, activityType = 'flashcard', responseTimeMs, userAnswer, shouldLowerMastery, score } = body;
+
+    // For flashcard system, use rating (1=hard, 2=good, 3=easy)
+    // For game system, determine review correctness and quality
+    let reviewIsCorrect = isCorrect;
+    let quality: number | undefined;
+    
+    if (rating !== undefined) {
+      reviewIsCorrect = rating >= 2; // Good (2) and Easy (3) are considered correct
+    } else if (score !== undefined) {
+      // Map 1-10 to 1-5 scale (1-2=1, 3-4=2, 5-6=3, 7-8=4, 9-10=5)
+      quality = Math.min(5, Math.ceil(score / 2));
+      reviewIsCorrect = quality >= 3;
+    }
 
     // Validate required fields
-    if (!vocabularyId || typeof isCorrect !== "boolean") {
+    if (!vocabularyId || (rating === undefined && isCorrect === undefined)) {
       return NextResponse.json(
-        { error: "Valid vocabulary ID and isCorrect boolean are required" },
+        { error: "Valid vocabulary ID and rating or isCorrect are required" },
         { status: 400 }
       );
     }
     
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(vocabularyId)) {
+    // For simple integer IDs (not UUIDs)
+    const numericVocabId = parseInt(vocabularyId);
+    if (isNaN(numericVocabId)) {
       return NextResponse.json(
         { error: "Invalid vocabulary ID format" },
         { status: 400 }
@@ -33,15 +46,10 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Get current vocabulary data with new fields
+    // Get current vocabulary data (only basic fields)
     const { data: vocabulary, error: fetchError } = await supabase
       .from('vocabularies')
-      .select(`
-        id, word, meaning, definition, created_at, difficulty, 
-        mastery_level, last_mastered, consecutive_correct, 
-        consecutive_incorrect, ease_factor, last_reviewed, 
-        next_review, review_count
-      `)
+      .select('*')
       .eq('id', vocabularyId)
       .eq('user_id', userId)
       .single();
@@ -71,8 +79,17 @@ export async function POST(request: NextRequest) {
     };
 
     // For StudyGame: override mastery lowering based on consecutive incorrect tracking
-    if (shouldLowerMastery && !isCorrect && currentMasteryLevel > 0) {
-      // Force mastery level decrease when shouldLowerMastery flag is set
+    // or very low quality scores from new modes
+    let forceLowerMastery = false;
+    if (shouldLowerMastery && !reviewIsCorrect && currentMasteryLevel > 0) {
+      forceLowerMastery = true;
+    } else if (quality !== undefined && quality <= 2 && currentMasteryLevel > 0) {
+      // New modes: immediately lower mastery for very poor quality (1-2)
+      forceLowerMastery = true;
+    }
+    
+    if (forceLowerMastery) {
+      // Force mastery level decrease
       currentMasteryLevel = Math.max(currentMasteryLevel - 1, 0);
       vocabularyData.mastery_level = currentMasteryLevel;
     }
@@ -81,12 +98,13 @@ export async function POST(request: NextRequest) {
     const srsResult = calculateSpacedRepetition({
       vocabulary_id: vocabularyId,
       user_id: userId,
-      is_correct: isCorrect,
-      vocabulary_data: vocabularyData
+      is_correct: reviewIsCorrect, // Use the determined correctness
+      vocabulary_data: vocabularyData,
+      quality: quality // Pass quality for enhanced SM2 algorithm when available
     });
     
-    // If shouldLowerMastery was set, ensure the result reflects the forced decrease
-    if (shouldLowerMastery && !isCorrect && vocabularyData.mastery_level >= 0) {
+    // If mastery was forcibly lowered, ensure the result reflects the forced decrease
+    if (forceLowerMastery && vocabularyData.mastery_level >= 0) {
       srsResult.new_mastery_level = Math.min(srsResult.new_mastery_level, vocabularyData.mastery_level);
       srsResult.mastery_changed = true;
     }
@@ -130,7 +148,7 @@ export async function POST(request: NextRequest) {
       vocabulary_id: vocabularyId,
       user_id: userId,
       activity_type: activityType,
-      is_correct: isCorrect,
+      is_correct: reviewIsCorrect,
       response_time_ms: responseTimeMs || null,
       user_answer: userAnswer || null,
       correct_answer: vocabulary.word,

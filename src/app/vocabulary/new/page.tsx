@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Sparkles, Save, X, BookOpen, FileText } from "lucide-react";
 import { NewTagDialog } from "@/components/NewTagDialog";
+import { toast } from "sonner";
 
 const vocabularySchema = z.object({
   word: z.string().min(1, "Word is required"),
@@ -129,7 +130,20 @@ export default function NewVocabularyPage() {
       }
 
       const result = await response.json();
-      router.push(`/vocabulary/${result.id}`);
+      
+      // Show success toast
+      toast.success("✅ Vocabulary saved successfully!", {
+        description: `"${data.word}" has been added to your vocabulary collection.`,
+        duration: 4000,
+      });
+      
+      // Reset form and state
+      form.reset();
+      setTags([]);
+      setTagInput("");
+      
+      // Redirect to vocabulary list
+      router.push("/vocabulary");
     } catch (error) {
       console.error("Error creating vocabulary:", error);
       alert("Failed to create vocabulary. Please try again.");

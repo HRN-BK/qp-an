@@ -427,4 +427,50 @@ describe('SRS Module', () => {
       expect(MASTERY_REACTIVATION_DAYS).toBe(90);
     });
   });
+
+  // Test quality score integration
+  it('should use quality score for enhanced SM2 algorithm', () => {
+    const highQualityResult = calculateSpacedRepetition({
+      vocabulary_id: 'test-vocab',
+      user_id: 'test-user',
+      is_correct: true,
+      vocabulary_data: {
+        id: 'test-vocab',
+        mastery_level: 1,
+        last_mastered: null,
+        last_reviewed: null,
+        next_review: null,
+        consecutive_correct: 1,
+        consecutive_incorrect: 0,
+        review_count: 0,
+        ease_factor: 2.5
+      },
+      quality: 5 // High quality score (mapped from 9-10 range)
+    });
+
+    const lowQualityResult = calculateSpacedRepetition({
+      vocabulary_id: 'test-vocab-2',
+      user_id: 'test-user',
+      is_correct: false,
+      vocabulary_data: {
+        id: 'test-vocab-2',
+        mastery_level: 2,
+        last_mastered: null,
+        last_reviewed: null,
+        next_review: null,
+        consecutive_correct: 0,
+        consecutive_incorrect: 0,
+        review_count: 0,
+        ease_factor: 2.5
+      },
+      quality: 1 // Very low quality score (mapped from 1-2 range)
+    });
+
+    // High quality should allow faster advancement (only needs 2 consecutive)
+    expect(highQualityResult.new_mastery_level).toBe(2); // Should advance with quality >= 4
+    
+    // Low quality should immediately lower mastery even on first incorrect
+    expect(lowQualityResult.new_mastery_level).toBe(1); // Should lower with quality <= 2
+    expect(lowQualityResult.mastery_changed).toBe(true);
+  });
 });

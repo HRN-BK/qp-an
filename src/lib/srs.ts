@@ -59,6 +59,7 @@ export interface ReviewInput {
   user_id: string;
   is_correct: boolean;
   vocabulary_data: VocabularyData;
+  quality?: number; // Optional quality score (1-5) for enhanced SM2 algorithm
 }
 
 /**
@@ -128,17 +129,31 @@ function updateMasteryLevel(
   current_level: number,
   is_correct: boolean,
   consecutive_correct: number,
-  consecutive_incorrect_session: number
+  consecutive_incorrect_session: number,
+  quality?: number
 ): number {
   if (is_correct) {
     // Increase mastery level based on consecutive correct answers
-    if (consecutive_correct >= 3 && current_level < MASTERY_LEVELS.MASTERED) {
+    // If quality is available, consider it for advancement
+    let advancement_threshold = 3;
+    if (quality !== undefined) {
+      // Higher quality (4-5) allows faster advancement
+      advancement_threshold = quality >= 4 ? 2 : 3;
+    }
+    
+    if (consecutive_correct >= advancement_threshold && current_level < MASTERY_LEVELS.MASTERED) {
       return Math.min(current_level + 1, MASTERY_LEVELS.MASTERED);
     }
     return current_level;
   } else {
     // Only decrease mastery level when consecutive incorrect hits 2
-    if (consecutive_incorrect_session >= 2 && current_level > MASTERY_LEVELS.NEW) {
+    // Or if quality is very low (1-2) on new modes
+    let should_lower = consecutive_incorrect_session >= 2;
+    if (quality !== undefined && quality <= 2) {
+      should_lower = true; // Immediate lowering for very poor quality
+    }
+    
+    if (should_lower && current_level > MASTERY_LEVELS.NEW) {
       return Math.max(current_level - 1, MASTERY_LEVELS.NEW);
     }
     return current_level; // Preserve mastery level on single wrong answers
@@ -154,7 +169,7 @@ export function calculateSpacedRepetition(input: ReviewInput): ReviewResult {
     cleanupSessionMemory();
   }
   
-  const { vocabulary_id, user_id, is_correct, vocabulary_data } = input;
+  const { vocabulary_id, user_id, is_correct, vocabulary_data, quality } = input;
   const sessionKey = getSessionKey(user_id, vocabulary_id);
   
   // Get or initialize session memory
@@ -178,7 +193,8 @@ export function calculateSpacedRepetition(input: ReviewInput): ReviewResult {
     current_mastery,
     is_correct,
     vocabulary_data.consecutive_correct + (is_correct ? 1 : 0),
-    sessionData.consecutive_incorrect
+    sessionData.consecutive_incorrect,
+    quality
   );
   
   // Special handling for mastered words that are due again

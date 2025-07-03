@@ -40,13 +40,21 @@ export default function VocabularyModal({ vocabulary, isOpen, onClose }: Vocabul
   const [dragStartY, setDragStartY] = useState(0);
   const [modalY, setModalY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      setModalY(0);
+      setIsAnimating(true);
+      // Slide in from bottom
+      setModalY(window.innerHeight);
+      setTimeout(() => {
+        setModalY(0);
+        setTimeout(() => setIsAnimating(false), 300);
+      }, 10);
     } else {
       document.body.style.overflow = 'unset';
+      setModalY(0);
     }
 
     return () => {
@@ -67,10 +75,19 @@ export default function VocabularyModal({ vocabulary, isOpen, onClose }: Vocabul
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setIsAnimating(true);
+    
     if (modalY > 200) {
-      onClose();
+      // Slide out to bottom
+      setModalY(window.innerHeight);
+      setTimeout(() => {
+        onClose();
+        setIsAnimating(false);
+      }, 300);
     } else {
+      // Snap back to top
       setModalY(0);
+      setTimeout(() => setIsAnimating(false), 300);
     }
   };
 
@@ -87,10 +104,19 @@ export default function VocabularyModal({ vocabulary, isOpen, onClose }: Vocabul
 
   const handleTouchEnd = () => {
     setIsDragging(false);
+    setIsAnimating(true);
+    
     if (modalY > 200) {
-      onClose();
+      // Slide out to bottom
+      setModalY(window.innerHeight);
+      setTimeout(() => {
+        onClose();
+        setIsAnimating(false);
+      }, 300);
     } else {
+      // Snap back to top
       setModalY(0);
+      setTimeout(() => setIsAnimating(false), 300);
     }
   };
 
@@ -118,12 +144,34 @@ export default function VocabularyModal({ vocabulary, isOpen, onClose }: Vocabul
     return colors[Math.min(level, 5)];
   };
 
+  // Handle close with slide animation
+  const handleClose = () => {
+    setIsAnimating(true);
+    setModalY(window.innerHeight);
+    setTimeout(() => {
+      onClose();
+      setIsAnimating(false);
+    }, 300);
+  };
+
+  // Handle backdrop click
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      handleClose();
+    }
+  };
+
   if (!isOpen || !vocabulary) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
+    <div 
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
       <div
-        className="relative w-full max-w-2xl bg-white dark:bg-gray-900 rounded-t-xl shadow-2xl transition-transform duration-200 ease-out max-h-[90vh] overflow-hidden"
+        className={`relative w-full max-w-2xl bg-white dark:bg-gray-900 rounded-t-xl shadow-2xl max-h-[90vh] overflow-hidden ${
+          isAnimating ? 'transition-transform duration-300 ease-out' : ''
+        }`}
         style={{ transform: `translateY(${modalY}px)` }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -170,7 +218,7 @@ export default function VocabularyModal({ vocabulary, isOpen, onClose }: Vocabul
             <Button
               variant="ghost"
               size="sm"
-              onClick={onClose}
+              onClick={handleClose}
               className="h-8 w-8 p-0"
             >
               <X className="h-4 w-4" />

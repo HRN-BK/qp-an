@@ -150,3 +150,96 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function GET(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = createServiceClient();
+
+    // Get vocabularies with basic info
+    const { data: vocabularies, error: vocabError } = await supabase
+      .from('vocabularies')
+      .select(`
+        id, word, pronunciation, part_of_speech, meaning, definition,
+        difficulty, cefr_level, notes, created_at, updated_at, example
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (vocabError) {
+      console.error('Error fetching vocabularies:', vocabError);
+      return NextResponse.json(
+        { error: "Failed to fetch vocabularies" },
+        { status: 500 }
+      );
+    }
+
+    // Get vocabulary IDs
+    const vocabularyIds = vocabularies?.map(v => v.id) || [];
+    
+    // Fetch tags for all vocabularies
+    const { data: vocabularyTags } = await supabase
+      .from('vocabulary_tags')
+      .select(`
+        vocabulary_id,
+        tags (name)
+      `)
+      .in('vocabulary_id', vocabularyIds);
+
+    // Fetch synonyms for all vocabularies
+    const { data: synonymsData } = await supabase
+      .from('synonyms')
+      .select('vocabulary_id, synonym_text')
+      .in('vocabulary_id', vocabularyIds);
+
+    // Fetch antonyms for all vocabularies
+    const { data: antonymsData } = await supabase
+      .from('antonyms')
+      .select('vocabulary_id, antonym_text')
+      .in('vocabulary_id', vocabularyIds);
+
+    // Combine all data
+    const enrichedVocabularies = vocabularies?.map(vocab => {
+      // Get tags for this vocabulary
+      const vocabTags = vocabularyTags
+        ?.filter(vt => vt.vocabulary_id === vocab.id)
+        ?.map(vt => vt.tags?.name)
+        ?.filter(Boolean) || [];
+
+      // Get synonyms for this vocabulary
+      const vocabSynonyms = synonymsData
+        ?.filter(s => s.vocabulary_id === vocab.id)
+        ?.map(s => ({ synonym_text: s.synonym_text })) || [];
+
+      // Get antonyms for this vocabulary
+      const vocabAntonyms = antonymsData
+        ?.filter(a => a.vocabulary_id === vocab.id)
+        ?.map(a => ({ antonym_text: a.antonym_text })) || [];
+
+      return {
+        ...vocab,
+        tags: vocabTags,
+        synonyms: vocabSynonyms,
+        antonyms: vocabAntonyms,
+        examples: vocab.example ? [vocab.example] : []
+      };
+    }) || [];
+
+    return NextResponse.json({
+      vocabularies: enrichedVocabularies,
+      count: enrichedVocabularies.length
+    });
+
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

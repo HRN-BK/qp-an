@@ -9,6 +9,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CEFRBadge } from "@/components/CEFRBadge";
 
+import VocabularyModal from "@/components/VocabularyModal";
+
 interface VocabularyCardProps {
   vocabulary: {
     id: string;
@@ -18,6 +20,12 @@ interface VocabularyCardProps {
     difficulty?: string;
     notes?: string;
     created_at: string;
+    cefr_level?: string;
+    meaning?: string;
+    tags?: string[];
+    synonyms?: string[];
+    antonyms?: string[];
+    examples?: string[];
   };
   onDelete?: () => void;
 }
@@ -26,11 +34,10 @@ export function VocabularyCard({ vocabulary, onDelete }: VocabularyCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
   
-  // Placeholder for main meaning - in a real app this would come from vocabulary_meanings
-  const mainMeaning = "Definition will be loaded from vocabulary_meanings table";
-  
-  // Placeholder tags - in a real app this would come from vocabulary_tags join
-  const tags = ["example", "beginner"];
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const mainMeaning = vocabulary.meaning || "Meaning not available";
+  const tags = vocabulary.tags || [];
 
   const difficultyColors = {
     'A1': "bg-green-100 text-green-800",
@@ -69,6 +76,10 @@ export function VocabularyCard({ vocabulary, onDelete }: VocabularyCardProps) {
     }
   };
 
+  const handleCardClick = () => {
+    setIsModalOpen(true);
+  };
+
   const handleEdit = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -77,7 +88,7 @@ export function VocabularyCard({ vocabulary, onDelete }: VocabularyCardProps) {
 
   return (
     <Card className="hover:shadow-md transition-shadow h-full group relative">
-      <Link href={`/vocabulary/${vocabulary.id}`} className="block">
+      <div onClick={handleCardClick} className="block cursor-pointer">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">{vocabulary.word}</CardTitle>
@@ -118,7 +129,7 @@ export function VocabularyCard({ vocabulary, onDelete }: VocabularyCardProps) {
             </div>
           )}
         </CardContent>
-      </Link>
+      </div>
       
       {/* Action buttons - only show on hover */}
       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -140,6 +151,12 @@ export function VocabularyCard({ vocabulary, onDelete }: VocabularyCardProps) {
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
+      
+      <VocabularyModal 
+        vocabulary={vocabulary as any}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </Card>
   );
 }

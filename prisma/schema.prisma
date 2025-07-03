@@ -50,6 +50,8 @@ model Vocabulary {
   last_reviewed   DateTime? @db.Timestamptz
   next_review     DateTime? @db.Timestamptz
   review_count    Int       @default(0)
+  repetitions     Int       @default(0)
+  interval        Int       @default(1)
   ease_factor     Decimal   @default(2.50) @db.Decimal(3,2)
   last_rating     Int?
   
@@ -57,6 +59,8 @@ model Vocabulary {
   
   tags         VocabularyTag[]
   review_logs  ReviewLog[]
+  context_feedback ContextFeedback[]
+  collocations Collocation[]
   
   @@unique([user_id, word])
   @@map("vocabularies")
@@ -105,4 +109,32 @@ model AiDraft {
   updated_at       DateTime  @default(now()) @db.Timestamptz
   
   @@map("ai_drafts")
+}
+
+model ContextFeedback {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String
+  vocabulary_id String  @db.Uuid
+  mode          String  // 'context_write' | 'context_fill'
+  user_sentence String
+  ai_score      Int
+  ai_feedback   String   // full feedback text
+  suggestions   Json     @default("[]") @db.JsonB // collocations / phrasal verbs
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  vocabulary Vocabulary @relation(fields: [vocabulary_id], references: [id], onDelete: Cascade)
+
+  @@map("context_feedback")
+}
+
+model Collocation {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vocabulary_id String  @db.Uuid
+  text          String
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  vocabulary Vocabulary @relation(fields: [vocabulary_id], references: [id], onDelete: Cascade)
+
+  @@unique([vocabulary_id, text])
+  @@map("collocations")
 }

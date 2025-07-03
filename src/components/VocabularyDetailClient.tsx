@@ -141,17 +141,15 @@ export function VocabularyDetailClient({ vocabulary, reviews }: VocabularyDetail
 
   const handleReview = async (quality: number) => {
     try {
-      const response = await fetch("/api/review", {
+      const response = await fetch("/api/vocab/review", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          vocabulary_id: vocabulary.id,
-          review_type: "manual",
-          score: quality * 20, // Convert 1-5 to 20-100
-          correct_answers: quality >= 3 ? 1 : 0,
-          total_questions: 1,
+          vocabularyId: vocabulary.id,
+          rating: quality, // Use 1-5 rating for compatibility
+          activityType: "manual",
         }),
       });
 

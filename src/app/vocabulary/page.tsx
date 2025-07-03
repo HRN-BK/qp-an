@@ -15,9 +15,16 @@ interface Vocabulary {
   pronunciation?: string;
   part_of_speech?: string;
   difficulty?: string;
+  cefr_level?: string;
+  meaning?: string;
+  definition?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
+  tags?: string[];
+  synonyms?: Array<{ synonym_text: string }>;
+  antonyms?: Array<{ antonym_text: string }>;
+  examples?: string[];
 }
 
 export default function VocabularyPage() {
@@ -27,25 +34,30 @@ export default function VocabularyPage() {
   const [error, setError] = useState<string | null>(null);
   
   const fetchVocabularies = async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
     
     try {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase
-        .from('vocabularies')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        throw error;
+      const response = await fetch('/api/vocab');
+      if (!response.ok) {
+        throw new Error('Failed to fetch vocabularies');
       }
-
-      setVocabularies(data || []);
+      
+      const data = await response.json();
+      
+      // Process the data to include tags as an array
+      const processedVocabularies = data.vocabularies?.map((vocab: any) => ({
+        ...vocab,
+        tags: vocab.tags || [],
+        examples: vocab.example ? [vocab.example] : []
+      })) || [];
+      
+      setVocabularies(processedVocabularies);
     } catch (err) {
       console.error('Error fetching vocabularies:', err);
       setError('Error loading vocabularies.');
@@ -57,10 +69,6 @@ export default function VocabularyPage() {
   useEffect(() => {
     fetchVocabularies();
   }, [user?.id]);
-
-  if (!user) {
-    return <div>Please sign in to view vocabularies.</div>;
-  }
 
   if (isLoading) {
     return (

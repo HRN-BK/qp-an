@@ -78,6 +78,44 @@ Cypress.Commands.add('mockVocabAPI', () => {
     };
   }).as('submitReview');
   
+  // Mock AI feedback endpoint
+  cy.intercept('POST', '/api/vocab/ai-feedback', (req) => {
+    const { vocabularyId, mode, userSentence } = req.body;
+    
+    // Simulate AI response based on input quality
+    const score = userSentence.length > 10 ? 8 : 5;
+    const feedback = score > 7 ? 'Excellent usage of the word in context!' : 'Good attempt, but could be improved.';
+    
+    return {
+      statusCode: 200,
+      body: {
+        score,
+        feedback,
+        suggestions: {
+          improvements: ['Try using more descriptive language', 'Consider sentence structure'],
+          collocations: ['beautiful scenery', 'beautiful music', 'beautiful day']
+        }
+      }
+    };
+  }).as('getAIFeedback');
+  
+  // Mock collocation save endpoint
+  cy.intercept('POST', '/api/vocab/collocation', {
+    statusCode: 200,
+    body: {
+      success: true,
+      id: 'collocation-123'
+    }
+  }).as('saveCollocation');
+  
+  // Mock sentence generation endpoint
+  cy.intercept('POST', '/api/vocab/generate-sentence', {
+    statusCode: 200,
+    body: {
+      sentence: 'The sunset over the ocean was absolutely ________.'
+    }
+  }).as('generateSentence');
+  
   cy.intercept('GET', '/api/vocab/stats', {
     statusCode: 200,
     body: {

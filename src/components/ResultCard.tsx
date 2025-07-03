@@ -25,9 +25,15 @@ interface ResultCardProps {
   isCorrect: boolean;
   userAnswer: string;
   correctAnswer: string;
-  activityType: 'listening' | 'translation' | 'synonym' | 'fill_blank';
+  activityType: 'listening' | 'translation' | 'synonym' | 'fill_blank' | 'context_write' | 'context_fill';
   responseTime: number;
   masteryChange?: number;
+  aiScore?: number;
+  aiFeedback?: string;
+  aiSuggestions?: {
+    improvements: string[];
+    collocations: string[];
+  };
   onContinue: () => void;
 }
 
@@ -39,6 +45,9 @@ export function ResultCard({
   activityType,
   responseTime,
   masteryChange = 0,
+  aiScore,
+  aiFeedback,
+  aiSuggestions,
   onContinue
 }: ResultCardProps) {
   const playAudio = async () => {
@@ -76,6 +85,8 @@ export function ResultCard({
       case 'translation': return 'Translation';
       case 'synonym': return 'Synonym';
       case 'fill_blank': return 'Fill in the Blank';
+      case 'context_write': return 'Context Writing';
+      case 'context_fill': return 'Context Fill';
       default: return type;
     }
   };
@@ -202,6 +213,60 @@ export function ResultCard({
             <span className="font-medium">
               Mastery level {masteryChange > 0 ? 'increased' : 'decreased'} by {Math.abs(masteryChange)}
             </span>
+          </div>
+        )}
+
+        {/* AI Feedback Section for Context Modes */}
+        {(activityType === 'context_write' || activityType === 'context_fill') && aiScore !== undefined && (
+          <div className="bg-white rounded-lg p-4 border">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-semibold text-gray-900">AI Feedback</h4>
+                <div className="flex items-center gap-2">
+                  <Badge variant={aiScore >= 7 ? "default" : "destructive"} className="text-sm">
+                    Score: {aiScore}/10
+                  </Badge>
+                </div>
+              </div>
+              
+              {aiFeedback && (
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-2">Detailed Feedback:</p>
+                  <p className="text-gray-700 bg-gray-50 p-3 rounded">{aiFeedback}</p>
+                </div>
+              )}
+              
+              {aiSuggestions && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {aiSuggestions.improvements && aiSuggestions.improvements.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-2">Suggestions for Improvement:</p>
+                      <ul className="space-y-1">
+                        {aiSuggestions.improvements.map((suggestion, index) => (
+                          <li key={index} className="text-sm text-gray-700 flex items-start gap-2">
+                            <span className="text-blue-500 mt-1">•</span>
+                            <span>{suggestion}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {aiSuggestions.collocations && aiSuggestions.collocations.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-2">Common Collocations:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {aiSuggestions.collocations.map((collocation, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {collocation}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
