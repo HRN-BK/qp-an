@@ -4,11 +4,11 @@ import '@testing-library/jest-dom'
 global.fetch = jest.fn()
 
 // Mock environment variables
-process.env.OPENAI_API_KEY = 'test-openai-key'
-process.env.SUPABASE_URL = 'https://test.supabase.co'
-process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key'
-process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'test-clerk-key'
-process.env.CLERK_SECRET_KEY = 'test-clerk-secret'
+process.env.OPENAI_API_KEY = process.env.TEST_OPENAI_API_KEY
+process.env.SUPABASE_URL = process.env.TEST_SUPABASE_URL
+process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.TEST_SUPABASE_SERVICE_ROLE_KEY
+process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = process.env.TEST_CLERK_PUBLISHABLE_KEY
+process.env.CLERK_SECRET_KEY = process.env.TEST_CLERK_SECRET_KEY
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({

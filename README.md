@@ -150,17 +150,45 @@ After migration, verify the schema includes:
 - [ ] SRS algorithm functioning as expected
 
 ### Environment Variables
-Ensure these are set in your deployment environment:
 
+📋 **For detailed environment setup, see [Environment Variables Documentation](docs/env.md)**
+
+#### Vercel Deployment Setup
+
+1. **Copy the Vercel environment template:**
+   ```bash
+   # Use the provided template
+   cat vercel.env
+   ```
+
+2. **Set up environment variables in Vercel Dashboard:**
+   - Go to [Vercel Dashboard](https://vercel.com/dashboard) → Your Project → Settings → Environment Variables
+   - Add each variable from `vercel.env` template
+   - Set Environment to "Production" for production variables
+   - Use "Sensitive" option for secrets (API keys, service role keys)
+   - Ensure Clerk keys use `live_` prefix for production
+   - Ensure Supabase URLs point to your production project
+
+#### Required Environment Variables:
 ```env
-# Required for production
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+# Clerk Authentication (Production)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+
+# Supabase Database (Production)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-OPENAI_API_KEY=your_openai_key
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_key
-CLERK_SECRET_KEY=your_clerk_secret
+
+# AI Services
+OPENAI_API_KEY=sk-your_openai_key
+
+# Database
+DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
+DIRECT_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
 ```
+
+⚠️ **Security Note:** Never commit actual secrets to version control. All sensitive variables should be in `.env.local` (already in `.gitignore`) for development and set in Vercel Dashboard for production.
 
 ### Deployment Steps
 
