@@ -17,7 +17,7 @@ const MaybeClerkProvider: React.FC<{ children: React.ReactNode }> =
         </ClerkProvider>
       )
     : ({ children }) => (
-        <ClerkProvider publishableKey="pk_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+        <ClerkProvider publishableKey="pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk">
           {children}
         </ClerkProvider>
       );
