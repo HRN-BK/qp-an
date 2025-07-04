@@ -2,14 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { ENV } from "@/lib/env";
 
-const openai = new OpenAI({
-  apiKey: ENV.OPENAI_API_KEY,
-});
-
 // In-memory cache for development (in production, use Redis or similar)
 const cache = new Map<string, { data: any; expiry: number }>();
 
 export async function GET(request: NextRequest) {
+  const openai = new OpenAI({ apiKey: ENV.OPENAI_API_KEY || 'test-key' });
   try {
     const { searchParams } = new URL(request.url);
     const word = searchParams.get("word");

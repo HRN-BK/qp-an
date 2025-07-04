@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
 
-const supabase = createServiceClient();
-
 export async function GET(request: NextRequest) {
+  const supabase = createServiceClient();
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');

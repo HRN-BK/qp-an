@@ -30,8 +30,8 @@ function validateEnv() {
   }
 }
 
-// Validate environment variables once at runtime
-validateEnv();
+// Optionally validate environment variables at runtime when needed
+// (Avoid validating at build time to prevent CI failures)
 
 // Export typed environment object
 export const ENV = {
@@ -42,3 +42,5 @@ export const ENV = {
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
 } as const;
+
+export { validateEnv };

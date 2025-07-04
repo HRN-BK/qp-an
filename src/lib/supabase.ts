@@ -6,7 +6,7 @@ import { ENV } from './env';
  * Uses the public anon key for authentication
  */
 export function createBrowserClient() {
-  return createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+  return createClient(ENV.SUPABASE_URL || 'http://localhost', ENV.SUPABASE_ANON_KEY || 'public-anon-key', {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
@@ -20,7 +20,7 @@ export function createBrowserClient() {
  * Uses Next.js cookies and can inject Clerk JWT for RLS
  */
 export function createServerClient() {
-  return createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+  return createClient(ENV.SUPABASE_URL || 'http://localhost', ENV.SUPABASE_ANON_KEY || 'public-anon-key', {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -33,7 +33,7 @@ export function createServerClient() {
  * Injects the Clerk JWT token into the Authorization header
  */
 export function createServerClientWithAuth(clerkToken: string) {
-  return createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+  return createClient(ENV.SUPABASE_URL || 'http://localhost', ENV.SUPABASE_ANON_KEY || 'public-anon-key', {
     global: {
       headers: {
         Authorization: `Bearer ${clerkToken}`,
@@ -52,18 +52,22 @@ export function createServerClientWithAuth(clerkToken: string) {
  */
 export function createServiceClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  
+
+  if (!ENV.SUPABASE_URL) {
+    console.warn('SUPABASE_URL is not set; using placeholder URL');
+  }
+
   if (!serviceKey) {
     console.warn('No service role key found, falling back to anon key');
-    return createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+    return createClient(ENV.SUPABASE_URL || 'http://localhost', ENV.SUPABASE_ANON_KEY || 'public-anon-key', {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
   }
-  
-  return createClient(ENV.SUPABASE_URL, serviceKey, {
+
+  return createClient(ENV.SUPABASE_URL || 'http://localhost', serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

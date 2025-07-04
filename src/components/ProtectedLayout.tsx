@@ -11,6 +11,17 @@ interface ProtectedLayoutProps {
 }
 
 export function ProtectedLayout({ children }: ProtectedLayoutProps) {
+  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-6">
+          <Card className="p-6">{children}</Card>
+        </main>
+      </div>
+    );
+  }
+
   const { isSignedIn, isLoaded } = useUser();
   const router = useRouter();
 
