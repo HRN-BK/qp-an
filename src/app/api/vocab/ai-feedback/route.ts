@@ -5,10 +5,6 @@ import OpenAI from "openai";
 import { ENV } from "@/lib/env";
 import * as crypto from "crypto";
 
-const openai = new OpenAI({
-  apiKey: ENV.OPENAI_API_KEY,
-});
-
 // In-memory cache for development (keyed by hash of sentence)
 const cache = new Map<string, { data: any; expiry: number }>();
 
@@ -18,6 +14,7 @@ function createSentenceHash(vocabularyId: string, mode: string, userSentence: st
 }
 
 export async function POST(request: NextRequest) {
+  const openai = new OpenAI({ apiKey: ENV.OPENAI_API_KEY || 'test-key' });
   try {
     // 1. Validate auth & inputs
     const { userId } = await auth();

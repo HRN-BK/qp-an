@@ -2,11 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(request: NextRequest) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'test-key' });
   let passage = ''; // Declare at function scope
   
   try {

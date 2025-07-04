@@ -11,6 +11,9 @@ interface ProtectedLayoutProps {
 }
 
 export function ProtectedLayout({ children }: ProtectedLayoutProps) {
+  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    return <>{children}</>;
+  }
   const { isSignedIn, isLoaded } = useUser();
   const router = useRouter();
 
